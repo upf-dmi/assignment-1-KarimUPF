@@ -75,20 +75,14 @@ Table_1$Death <- gsub(3, NA, Table_1$Death)
 library(patchwork)
 library(ggplot2)
 # Replicate figure A
-plot_A <- ggplot(Table_1, aes(x = Age)) +
-  geom_histogram(
-    binwidth = 10, # Adjust the bin width to match your desired resolution
-    fill = "lightcyan2",
-    color = "black" # Border color
-  ) +
-  labs(
-    title = "Age",
-    x = "Age (years)",
-    y = "Frequency (n)"
-  ) +
-  ylim(0, 50) + # Set y-axis limits
-  theme_classic() +
-  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+plot_A <- as.ggplot(~hist(
+  Table_1$Age, 
+  ylim = c(0, 50), 
+  main = "Age", 
+  xlab = "Age (years)", 
+  ylab = "Frequency (n)", 
+  col = "lightcyan2" #Plot A
+))
 
 # Replicate figure B
 library(gridExtra)
@@ -136,6 +130,19 @@ bar_df <- data.frame(
   names = names(bar_tb),
   numbers = as.numeric(bar_tb)
 )
+plot_C <- function() {
+  plot_C <- barplot(
+    names = bar_df$names,
+    height = bar_df$numbers,
+    ylim = c(0, 80),
+    main = "Clinical classification",
+    xlab = "Clinical classification",
+    ylab = "Frequency (n)",
+    col = c("aquamarine2", "khaki1", "plum2", "indianred1"))
+  
+  text(plot_C, bar_df$numbers + 4, labels = bar_df$numbers, cex = 1)
+}
+plot_C <- as.ggplot(~plot_C())
 
 bar_tb_d <- table(Table_1$Death)
 bar_df_d <- data.frame(
@@ -143,34 +150,26 @@ bar_df_d <- data.frame(
   numbers = as.numeric(bar_tb_d)
 )
 
-wrap_elements(panel = as.ggplot(~hist(
-  Table_1$Age, 
-  ylim = c(0, 50), 
-  main = "Age", 
-  xlab = "Age (years)", 
-  ylab = "Frequency (n)", 
-  col = "lightcyan2" #Plot A
-  )), clip = FALSE) + 
-  plot_B + # Plot B
-  wrap_elements(panel = as.ggplot(~barplot(
-  names = bar_df$names,
-  height = bar_df$numbers,
-  ylim = c(0, 80),
-  xlab = "Clinical classification",
-  ylab = "Frequency (n)",
-  col = c("aquamarine2", "khaki1", "plum2", "indianred1"),
-  main = "Clinical classification" # Plot C
-)), clip = FALSE) +
-  wrap_elements(panel = as.ggplot(~barplot(
-  names = bar_df_d$names,
-  height = bar_df_d$numbers,
-  ylim = c(0, 150),
-  xlab = "Death",
-  ylab = "Frequency (n)",
-  col = c("aquamarine2", "khaki1"),
-  main = "Vital status",
-  yaxt = "n" # Plot D
-)), clip = FALSE) + 
+plot_D <- function() {
+  plot_D <- barplot(
+    names = bar_df_d$names,
+    height = bar_df_d$numbers,
+    ylim = c(0, 150),
+    xlab = "Death",
+    ylab = "Frequency (n)",
+    col = c("aquamarine2", "khaki1"),
+    main = "Vital status",
+    yaxt = "n"
+  )
+  text(plot_D, bar_df_d$numbers + 6, labels = bar_df_d$numbers, cex = 1)
+  axis(2, at = seq(0, 150, by = 50), labels = seq(0, 150, by = 50))
+}
+plot_D <- as.ggplot(~plot_D())
+
+wrap_elements(panel = plot_A, clip = FALSE) + 
+  plot_B +
+  wrap_elements(panel = plot_C, clip = FALSE) +
+  wrap_elements(panel = plot_D, clip = FALSE) + 
   plot_annotation(tag_levels = 'A') # Tag plots
 ```
 
