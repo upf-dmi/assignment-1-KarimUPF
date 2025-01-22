@@ -21,11 +21,21 @@ The original dataset comes from [here](https://archive.ics.uci.edu/ml/datasets/H
 ## Perform an EDA on the dataset
 
 ```{r}
+library(ggplot2)
 
+data <- read.csv("data/heart_disease_dataset.csv", sep="", na.strings = c("?"))
 
+summary(data)
 
+library(mice)
+imputed_data_pmm <- mice(data, m = 1, method = "pmm", maxit = 5, seed = 42)
+data <- complete(imputed_data)
 ```
 
+
+```{r}
+unique(data)
+```
 
 ## Create visualizations in order to show which variables seem to be more associated with heart disease
 
@@ -40,9 +50,129 @@ Using the supplementary material from the [Difference in mortality rates in hosp
 ## Reproduce Figure 1 from the publication
 
 ```{r}
+library(readxl)
+Table_1 <- read_excel("~/Desktop/Master/Term2/DMI/HandsOn/1/Article/Table 1.XLSX", skip = 1, na = "NI")
 
+#summary(Table_1)
+# Fixing errors in the data
+Table_1 <- Table_1[!duplicated(Table_1$ID), ] # Remove duplicated ID records
+
+Table_1$Gender <- gsub(72, NA, Table_1$Gender)
+
+Table_1$BMI <- gsub(",", ".", Table_1$BMI) # Change comma to decimal
+Table_1$BMI <- gsub(0, NA, Table_1$BMI) # Make 0 BMI a NA value
+Table_1$BMI <- as.numeric(Table_1$BMI)
+
+Table_1[Table_1$ID == 'COAG-HSJD-180', "Admission to ICU"] <- "Yes" # Incorrect addition of a random number before Yes
+Table_1[Table_1$ID == 'COAG-HSJD-076', "Admission to ICU"] <- NA # Incorrect data
+
+Table_1[!Table_1$`ARDS Diagnosis` %in% c("Yes", "No"), "ARDS Diagnosis"] <- NA # Incorrect data
+
+Table_1$`Use of NIV` <- gsub(8, NA, Table_1$`Use of NIV`)
+
+Table_1$Death <- gsub(3, NA, Table_1$Death)
+
+library(patchwork)
+library(ggplot2)
+# Replicate figure A
+plot_A <- ggplot(Table_1, aes(x = Age)) +
+  geom_histogram(
+    binwidth = 10, # Adjust the bin width to match your desired resolution
+    fill = "lightcyan2",
+    color = "black" # Border color
+  ) +
+  labs(
+    title = "Age",
+    x = "Age (years)",
+    y = "Frequency (n)"
+  ) +
+  ylim(0, 50) + # Set y-axis limits
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+# Replicate figure B
+library(gridExtra)
+library(grid)
+library(ggplotify)
+
+grid_table <- data.frame(
+  Clinical= c('G1', 'G2', 'G3', 'G4'),
+  NIV = c('-', '-/+', '+', '-/+'),
+  AMV = c('-', '+/-', '-', '+'),
+  ARDS = c('-', '-', '+', '+')
+)
+colnames(grid_table)[1] = 'Clinical\nclassification'
+theme <- gridExtra::ttheme_default(
+    core = list(fg_params=list(cex = 1.0)),
+    colhead = list(fg_params=list(cex = 0.8)),
+    rowhead = list(fg_params=list(cex = 0.8)))
+grob <- tableGrob(grid_table, theme = theme, rows = NULL)
+grob$widths <- unit(rep(0.6 / ncol(grob), ncol(grob)), "npc")
+grob$heights <- unit(rep(0.6 / nrow(grob), nrow(grob)), "npc") # new
+plot_B <- as.ggplot(grob) + ggtitle("Definition of the clinical classification") + theme(plot.title = element_text(hjust = 0.5, face = "bold")) 
+
+# Replicate figure C
+assign_group <- function(NIV, AMV, ARDS) {
+  if (is.na(NIV) || is.na(AMV) || is.na(ARDS)) {
+    return(NA)
+  }
+  if (NIV == "No" && AMV == "No" && ARDS == "No") {
+    return("G1")
+  } else if ((NIV %in% c("No", "Yes")) && (AMV %in% c("No", "Yes")) && ARDS == "No") {
+    return("G2")
+  } else if (NIV == "Yes" && AMV == "No" && ARDS == "Yes") {
+    return("G3")
+  } else if ((NIV %in% c("No", "Yes")) && AMV == "Yes" && ARDS == "Yes") {
+    return("G4")
+  } else {
+    return(NA)
+  }
+}
+
+Table_1$Group <- mapply(assign_group, Table_1$`Use of NIV`, Table_1$`Use of AMV`, Table_1$`ARDS Diagnosis`)
+
+bar_tb <- table(Table_1$Group)
+bar_df <- data.frame(
+  names = names(bar_tb),
+  numbers = as.numeric(bar_tb)
+)
+
+bar_tb_d <- table(Table_1$Death)
+bar_df_d <- data.frame(
+  names = names(bar_tb_d),
+  numbers = as.numeric(bar_tb_d)
+)
+
+wrap_elements(panel = as.ggplot(~hist(
+  Table_1$Age, 
+  ylim = c(0, 50), 
+  main = "Age", 
+  xlab = "Age (years)", 
+  ylab = "Frequency (n)", 
+  col = "lightcyan2" #Plot A
+  )), clip = FALSE) + 
+  plot_B + # Plot B
+  wrap_elements(panel = as.ggplot(~barplot(
+  names = bar_df$names,
+  height = bar_df$numbers,
+  ylim = c(0, 80),
+  xlab = "Clinical classification",
+  ylab = "Frequency (n)",
+  col = c("aquamarine2", "khaki1", "plum2", "indianred1"),
+  main = "Clinical classification" # Plot C
+)), clip = FALSE) +
+  wrap_elements(panel = as.ggplot(~barplot(
+  names = bar_df_d$names,
+  height = bar_df_d$numbers,
+  ylim = c(0, 150),
+  xlab = "Death",
+  ylab = "Frequency (n)",
+  col = c("aquamarine2", "khaki1"),
+  main = "Vital status",
+  yaxt = "n" # Plot D
+)), clip = FALSE) + 
+  plot_annotation(tag_levels = 'A') # Tag plots
 ```
-
 
 ## Reproduce Figure 2 from the publication
 but instead of representing the clusters in the annotation, represent the groups (G1 to G4)
