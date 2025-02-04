@@ -23,24 +23,138 @@ The original dataset comes from [here](https://archive.ics.uci.edu/ml/datasets/H
 ```{r}
 library(ggplot2)
 
-data <- read.csv("data/heart_disease_dataset.csv", sep="", na.strings = c("?"))
+# Read table
+data <- read.table("data/heart_disease_dataset.csv", header=TRUE, na.strings = c("?"))
 
+# Summarize the table
 summary(data)
 
+# Check duplicates
+data$patient_id[duplicated(data$patient_id)] # No duplicates
+data$patient_id = NULL # Remove as it won't be of any help to our data
+
+# Change numerical values to categories
+# Sex
+data$sex <- factor(ifelse(data$sex == 1, "male", "female"))
+# Chest pain type
+data$cp <- factor(data$cp, levels = c(1,2,3,4), labels = c("typical angina", "atypical angina","non-anginal pain","asymptomatic"))
+# Fasting blood sugar
+data$fbs <- factor(ifelse(data$fbs == 1, "TRUE", "FALSE"))
+# Resting electrocardiographic results
+data$restecg <- factor(data$restecg, levels = c(0,1,2), labels = c("normal", "ST-T wave abnormality","Ventricular hypertrophy"))
+# Exercise induced angina
+data$exang <- factor(ifelse(data$exang == 0, "No", "Yes"))
+# Slope of the peak exercise ST segment
+data$slope <- factor(data$slope, levels = c(1,2,3), labels = c("Upsloping", "Flat","Downslopping"))
+# "thal" variable
+data$thal <- factor(data$thal, levels = c(3,6,7), labels = c("Normal", "Fixed defect","Reversable defect"))
+# Diagnosis of heart disease
+data$num <- factor(ifelse(data$num > 0, "Disease", ifelse(data$num == 0, "No disease", data$num)))
+# Transform "ca" (number of major vessels) into a categorical variable
+data$ca <- as.factor(data$ca)
+# Then, we check the variables
+str(data)
+
+# Handling missing data using mice
 library(mice)
-imputed_data_pmm <- mice(data, m = 1, method = "pmm", maxit = 5, seed = 42)
+imputed_data <- mice(data)
+# Store the completed data into our main table
 data <- complete(imputed_data)
-```
 
+# Handling outliers
+library(cowplot)
+library(ggplotify)
+# For each numeric variable, we will be showing a boxplot
+age_bp <- as.ggplot(~boxplot(data$age))
+trestbps_bp <- as.ggplot(~boxplot(data$trestbps))
+chol_bp <- as.ggplot(~boxplot(data$chol))
+thalach_bp <- as.ggplot(~boxplot(data$thalach))
+oldpeak_bp <- as.ggplot(~boxplot(data$oldpeak))
 
-```{r}
-unique(data)
+grid.arrange(age_bp, trestbps_bp, chol_bp, thalach_bp, oldpeak_bp)
+
+# We can see some outliers in all the variables except age
+# Lets see the outliers
+summary(data[c('age','trestbps','chol','thalach','oldpeak')])
+# Using the IQR method, we can see that trestbps, chol, and oldpeak have outliers as they are above the bounds of Q1 and Q3
+
+# Using the outliers package, we will check these variables by their z-score
+library(outliers)
+# Save to new data
+new_data <- data
+# Score them and get there index, if z-score is higher than 3 or lower than -3, then it is considered an outlier
+
+# trestbps
+z_scores <- scores(new_data$trestbps, type = "z")
+outlier_indices <- which(z_scores > 3 | z_scores < -3)
+# Accomodation: Make equal to the next highest value
+max_non_outlier <- max(new_data$trestbps[-outlier_indices])
+new_data$trestbps[outlier_indices] <- max_non_outlier
+
+# Chol
+z_scores <- scores(new_data$chol, type = "z")
+outlier_indices <- which(z_scores > 3 | z_scores < -3)
+# Accomodation: Make equal to the next highest value
+max_non_outlier <- max(new_data$chol[-outlier_indices])
+new_data$chol[outlier_indices] <- max_non_outlier
+
+# oldpeak
+z_scores <- scores(new_data$oldpeak, type = "z")
+outlier_indices <- which(z_scores > 3 | z_scores < -3)
+# Accomodation: Make equal to the next highest value
+max_non_outlier <- max(new_data$oldpeak[-outlier_indices])
+new_data$oldpeak[outlier_indices] <- max_non_outlier
+
+library(DataExplorer)
+# Using the DataExplorer package, we can now get a report of our new data for univariate EDA
+DataExplorer::create_report(new_data)
+
 ```
 
 ## Create visualizations in order to show which variables seem to be more associated with heart disease
 
 ```{r}
+library(dplyr)
+library(tidyr)
+# We will start by Bivariate anaylsis of the 'num' variable (Diagnosis of heart disease)
 
+# 1. Categorical variables
+new_data[, c("sex", "fbs", "exang", "ca", "cp", "restecg", "slope", "thal", "num")] %>% gather(cols, value, -num) %>% ggplot(aes(x = value, fill = num)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~ cols, scales = "free", labeller = labeller(cols = c(
+    sex = "Gender (Male/Female)",
+    fbs = "Fasting Blood Sugar > 120 mg/dl",
+    exang = "Exercise Induced Angina",
+    ca = "Number of Major Vessels (0-3)",
+    cp = "Chest pain type",
+    restecg = "Resting electrocardiographic results",
+    slope = "Slope of the peak exercise ST segment",
+    thal = "Thalassemia"
+  ))) +
+  scale_fill_manual(values = c("red", "lightgreen"), labels = c("Disease", "No Disease")) +
+  labs(fill = "Heart Disease") +
+  xlab("Levels") + ylab("Frequency") +
+  ggtitle("Comparison of categorical variables\n for diagnosis of heart disease") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+# 2. Continous variables
+new_data[, c("age", "chol", "oldpeak", "thalach", "trestbps", "num")] %>% 
+  gather(cols, value, -num) %>% 
+  ggplot(aes(x = num, y = value, fill = num)) +
+  geom_violin(trim = FALSE, alpha = 0.7) + 
+  facet_wrap(~ cols, scales = "free", labeller = labeller(cols = c(
+    age = "Age",
+    chol = "Serum Cholesterol (mg/dl)",
+    oldpeak = "ST Depression (Exercise relative to rest)",
+    thalach = "Max Heart Rate Achieved",
+    trestbps = "Resting Blood Pressure (mm Hg)"
+  ))) +
+  scale_fill_manual(values = c("red", "lightgreen"), labels = c("Disease", "No Disease")) +
+  labs(fill = "Heart Disease", x = "Heart Disease Status", y = "Values") +
+  ggtitle("Comparison of Continuous Variables\n for Diagnosis of Heart Disease") +
+  theme_bw() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
 ```
 
 
@@ -50,8 +164,9 @@ Using the supplementary material from the [Difference in mortality rates in hosp
 ## Reproduce Figure 1 from the publication
 
 ```{r}
+library(ggplotify)
 library(readxl)
-Table_1 <- read_excel("~/Desktop/Master/Term2/DMI/HandsOn/1/Article/Table 1.XLSX", skip = 1, na = "NI")
+Table_1 <- read_excel("~/Desktop/OneDrive/Term2/DMI/HandsOn/1/Article/Table 1.XLSX", skip = 1, na = "NI")
 
 #summary(Table_1)
 # Fixing errors in the data
