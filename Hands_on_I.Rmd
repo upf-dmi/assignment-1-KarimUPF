@@ -166,7 +166,7 @@ Using the supplementary material from the [Difference in mortality rates in hosp
 ```{r}
 library(ggplotify)
 library(readxl)
-Table_1 <- read_excel("~/Desktop/OneDrive/Term2/DMI/HandsOn/1/Article/Table 1.XLSX", skip = 1, na = "NI")
+Table_1 <- read_excel("../Article/Table 1.XLSX", skip = 1, na = "NI")
 
 #summary(Table_1)
 # Fixing errors in the data
