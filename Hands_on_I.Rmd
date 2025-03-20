@@ -23,7 +23,7 @@ The original dataset comes from [here](https://archive.ics.uci.edu/ml/datasets/H
 ## Perform an EDA on the dataset
 
 ```{r}
-# Cargar librerías necesarias
+# Load libraries
 library(ggplot2)
 library(dplyr)
 library(tidyr)
